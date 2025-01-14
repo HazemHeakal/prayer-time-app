@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prayer Time Generator</title>
+</head>
+<body>
+    <h1>Generate Prayer Times</h1>
+    <form id="prayerForm">
+        <label for="latitude">Latitude:</label>
+        <input type="text" id="latitude" name="latitude" required>
+        <label for="longitude">Longitude:</label>
+        <input type="text" id="longitude" name="longitude" required>
+        <button type="submit">Generate</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        const form = document.getElementById("prayerForm");
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const latitude = document.getElementById("latitude").value;
+            const longitude = document.getElementById("longitude").value;
+
+            const response = await fetch("/api/prayer-times", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ latitude, longitude })
+            });
+
+            const data = await response.json();
+            if (data.iCalFile) {
+                const link = document.createElement("a");
+                link.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(data.iCalFile)}`;
+                link.download = "prayer_times.ics";
+                link.textContent = "Download iCal File";
+                document.getElementById("result").appendChild(link);
+            } else {
+                document.getElementById("result").textContent = "Error generating prayer times.";
+            }
+        });
+    </script>
+</body>
+</html>
