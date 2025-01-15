@@ -1,6 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const { createEvents } = require('ics');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const PORT = 3000;
 
@@ -9,10 +11,11 @@ const GEOCODING_API_KEY = process.env.GEOCODING_API_KEY;
 const PRAYER_TIMES_API = 'https://api.aladhan.com/v1/calendar';
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // Serve static files from the "public" directory
 
+// POST route to generate prayer times for the entire year
 app.post('/api/prayer-times', async (req, res) => {
-    const { location } = req.body;
+    const { location, year = new Date().getFullYear() } = req.body;
 
     try {
         // Step 1: Get latitude and longitude
@@ -25,41 +28,38 @@ app.post('/api/prayer-times', async (req, res) => {
 
         const { lat, lng } = geocodingResponse.data.results[0].geometry.location;
 
-        // Step 2: Fetch prayer times
-        const prayerTimesUrl = `${PRAYER_TIMES_API}?latitude=${lat}&longitude=${lng}&method=5`;
-        const prayerResponse = await axios.get(prayerTimesUrl);
-        const data = prayerResponse.data.data;
+        // Step 2: Fetch prayer times for the entire year
+        const events = [];
+        for (let month = 1; month <= 12; month++) {
+            const prayerTimesUrl = `${PRAYER_TIMES_API}?latitude=${lat}&longitude=${lng}&method=5&month=${month}&year=${year}`;
+            const prayerResponse = await axios.get(prayerTimesUrl);
+            const data = prayerResponse.data.data;
 
-        // Step 3: Generate iCal events
-        const events = data.map((day) => {
-            // Log the date for debugging
-            console.log(`Date from API: ${day.date.gregorian.date}`);
+            data.forEach((day) => {
+                const [dayOfMonth, month, year] = day.date.gregorian.date.split('-').map(Number);
 
-            // Parse DD-MM-YYYY format and rearrange to YYYY-MM-DD
-            const [dayOfMonth, month, year] = day.date.gregorian.date.split('-').map(Number);
+                const validDate = new Date(year, month - 1, dayOfMonth); // Validate date
+                if (
+                    validDate.getFullYear() !== year ||
+                    validDate.getMonth() + 1 !== month ||
+                    validDate.getDate() !== dayOfMonth
+                ) {
+                    console.error(`Invalid date detected: ${day.date.gregorian.date}`);
+                    return; // Skip invalid date
+                }
 
-            // Validate the rearranged date
-            const validDate = new Date(year, month - 1, dayOfMonth); // JS months are 0-indexed
-            if (
-                validDate.getFullYear() !== year ||
-                validDate.getMonth() + 1 !== month ||
-                validDate.getDate() !== dayOfMonth
-            ) {
-                console.error(`Invalid date detected: ${day.date.gregorian.date}`);
-                return null; // Skip invalid date
-            }
-
-            return Object.entries(day.timings).map(([prayer, time]) => {
-                const [hours, minutes] = time.split(' ')[0].split(':'); // Parse hours and minutes
-                return {
-                    title: prayer,
-                    start: [year, month, dayOfMonth, parseInt(hours), parseInt(minutes)],
-                    description: `${prayer} time in ${location}`,
-                };
+                Object.entries(day.timings).forEach(([prayer, time]) => {
+                    const [hours, minutes] = time.split(' ')[0].split(':');
+                    events.push({
+                        title: prayer,
+                        start: [year, month, dayOfMonth, parseInt(hours), parseInt(minutes)],
+                        description: `${prayer} time in ${location}`,
+                    });
+                });
             });
-        }).flat().filter(Boolean); // Remove null values caused by invalid dates
+        }
 
-        // Step 4: Create iCal events
+        // Step 3: Create iCal events
         createEvents(events, (error, value) => {
             if (error) {
                 console.error(error);
@@ -67,7 +67,17 @@ app.post('/api/prayer-times', async (req, res) => {
                 return;
             }
 
-            res.json({ iCalFile: value });
+            // Step 4: Save iCal file temporarily and return its URL
+            const timestamp = Date.now();
+            const fileName = `prayer-times-${timestamp}.ics`;
+            const filePath = path.join(__dirname, 'public', fileName);
+
+            fs.writeFileSync(filePath, value); // Save iCal file temporarily
+
+            res.json({
+                message: 'iCal file generated successfully!',
+                downloadURL: `${req.protocol}://${req.get('host')}/${fileName}`,
+            });
         });
     } catch (error) {
         console.error(error);
@@ -75,6 +85,7 @@ app.post('/api/prayer-times', async (req, res) => {
     }
 });
 
+// Start the server
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
