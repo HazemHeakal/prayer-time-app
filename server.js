@@ -35,10 +35,10 @@ app.post('/api/prayer-times', async (req, res) => {
             // Log the date for debugging
             console.log(`Date from API: ${day.date.gregorian.date}`);
 
-            // Adjust parsing based on the API date format (YYYY-MM-DD or DD-MM-YYYY)
-            const [year, month, dayOfMonth] = day.date.gregorian.date.split('-').map(Number);
+            // Parse DD-MM-YYYY format and rearrange to YYYY-MM-DD
+            const [dayOfMonth, month, year] = day.date.gregorian.date.split('-').map(Number);
 
-            // Validate the date
+            // Validate the rearranged date
             const validDate = new Date(year, month - 1, dayOfMonth); // JS months are 0-indexed
             if (
                 validDate.getFullYear() !== year ||
