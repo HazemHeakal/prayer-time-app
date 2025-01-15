@@ -8,10 +8,8 @@
 <body>
     <h1>Generate Prayer Times</h1>
     <form id="prayerForm">
-        <label for="latitude">Latitude:</label>
-        <input type="text" id="latitude" name="latitude" required>
-        <label for="longitude">Longitude:</label>
-        <input type="text" id="longitude" name="longitude" required>
+        <label for="location">Enter Location:</label>
+        <input type="text" id="location" name="location" placeholder="e.g., Badr City, Cairo, Egypt" required>
         <button type="submit">Generate</button>
     </form>
     <div id="result"></div>
@@ -21,24 +19,25 @@
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const latitude = document.getElementById("latitude").value;
-            const longitude = document.getElementById("longitude").value;
+            const location = document.getElementById("location").value;
 
             const response = await fetch("/api/prayer-times", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ latitude, longitude })
+                body: JSON.stringify({ location }),
             });
 
             const data = await response.json();
+            const resultDiv = document.getElementById("result");
+
             if (data.iCalFile) {
                 const link = document.createElement("a");
                 link.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(data.iCalFile)}`;
                 link.download = "prayer_times.ics";
                 link.textContent = "Download iCal File";
-                document.getElementById("result").appendChild(link);
+                resultDiv.appendChild(link);
             } else {
-                document.getElementById("result").textContent = "Error generating prayer times.";
+                resultDiv.textContent = data.error || "Error generating prayer times.";
             }
         });
     </script>
