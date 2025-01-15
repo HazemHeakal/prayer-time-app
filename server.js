@@ -32,18 +32,24 @@ app.post('/api/prayer-times', async (req, res) => {
 
         // Step 3: Generate iCal events
         const events = data.map((day) => {
-            // Correctly parse the Gregorian date
             const [year, month, dayOfMonth] = day.date.gregorian.date.split('-').map(Number);
 
+            // Validate the date
+            const validDate = new Date(year, month - 1, dayOfMonth); // JS months are 0-indexed
+            if (validDate.getDate() !== dayOfMonth) {
+                console.error(`Invalid date detected: ${day.date.gregorian.date}`);
+                return null; // Skip invalid date
+            }
+
             return Object.entries(day.timings).map(([prayer, time]) => {
-                const [hours, minutes] = time.split(' ')[0].split(':'); // Extract hours and minutes
+                const [hours, minutes] = time.split(' ')[0].split(':'); // Parse hours and minutes
                 return {
                     title: prayer,
                     start: [year, month, dayOfMonth, parseInt(hours), parseInt(minutes)],
                     description: `${prayer} time in ${location}`,
                 };
             });
-        }).flat();
+        }).flat().filter(Boolean); // Remove null values
 
         // Step 4: Create iCal events
         createEvents(events, (error, value) => {
